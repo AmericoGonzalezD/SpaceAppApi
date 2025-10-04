@@ -20,7 +20,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-$dbuq%&jx8*!+p10rx=g1$rnwbv!!%=t&3mritf$f*w!9oeh2)'
+SECRET_KEY = 'django-insecure-s5u57%iuyvpq9+@p_$(5q$vc8b^dbid^4ei64ssff8-z!qijxj'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -76,8 +76,15 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'Space App', # <-- Reemplaza con el nombre de tu BD
+        'USER': 'myadmin',           # <-- Reemplaza con tu usuario
+        'PASSWORD': 'prueba10',    # <-- Reemplaza con tu contraseña
+        'HOST': 'spaceapp.mysql.database.azure.com',                  # O la IP/host de tu servidor MySQL
+        'PORT': '3306',                       # Puerto por defecto de MySQL
+        'OPTIONS': {
+            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+        }
     }
 }
 
