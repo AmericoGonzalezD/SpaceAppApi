@@ -76,13 +76,21 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'Space App', # <-- Reemplaza con el nombre de tu BD
-        'USER': 'myadmin',           # <-- Reemplaza con tu usuario
-        'PASSWORD': 'prueba10',    # <-- Reemplaza con tu contraseña
-        'HOST': 'spaceapp.mysql.database.azure.com',                  # O la IP/host de tu servidor MySQL
-        'PORT': '3306',                       # Puerto por defecto de MySQL
+        'ENGINE': 'django.db.backends.mysql', # Motor de Django para MySQL
+        'NAME': 'dbspaceapp',                 # Nombre de la base de datos
+        'USER': 'myadmin',                       # Usuario de la base de datos
+        'PASSWORD': 'Prueba10',                # Contraseña del usuario
+        'HOST': 'spaceapp.mysql.database.azure.com',                  # Hostname
+        'PORT': '3306',                       # Puerto
+        
+        # Azure requiere SSL/TLS por defecto. Debes indicarle a Django esto.
         'OPTIONS': {
+            'ssl': {
+                # Puedes usar 'require' si tienes el certificado
+                'ssl_mode': 'REQUIRED',
+                'ca': '../certs/azure_mysql_chain.pem',  # Ruta al certificado CA si es necesario
+            },
+            # Configuración de modo SQL estricto, generalmente recomendada para MySQL
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
         }
     }
