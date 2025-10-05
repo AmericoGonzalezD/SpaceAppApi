@@ -28,7 +28,8 @@ DEBUG = True
 ALLOWED_HOSTS = [
     '.azurewebsites.net', 
     'weatheron.earth', 
-    'www.weatheron.earth'
+    'www.weatheron.earth',
+    '127.0.0.1'
 ]
 
 # Application definition
