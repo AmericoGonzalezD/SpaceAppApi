@@ -5,8 +5,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated, AllowAny
-# Importaciones necesarias para la búsqueda por distancia en la base de datos
-# 💥 FIX IMPORTADO: ExpressionWrapper para resolver FieldError
+# Importaciones necesarias para la búsqueda por distancia
 from django.db.models import F, FloatField, ExpressionWrapper
 from django.db.models.functions import Cast
 from decimal import Decimal
@@ -85,13 +84,13 @@ class FavoriteLocationViewSet(viewsets.ModelViewSet):
 
     
 # ----------------------------------------------------------------------
-# 3. Vista de Búsqueda por Coordenadas (Endpoint Principal)
+# 3. Vista de Búsqueda por Coordenadas (Endpoint: /clima-actual/)
 # ----------------------------------------------------------------------
 
 class CurrentWeatherView(APIView):
     """
     Endpoint para obtener el pronóstico más reciente, encontrando la 
-    Location más cercana si las coordenadas no son exactas.
+    Location más cercana por distancia euclidiana.
     """
     def get(self, request, *args, **kwargs):
         latitude_str = request.query_params.get('lat')
@@ -105,7 +104,7 @@ class CurrentWeatherView(APIView):
             )
 
         try:
-            # 💥 FIX: Convertimos a float para usar en el cálculo SQL 
+            # Convertimos a float para usar en el cálculo SQL
             lat_f = float(latitude_str) 
             lon_f = float(longitude_str)
         except Exception:
@@ -114,11 +113,7 @@ class CurrentWeatherView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # 2. LÓGICA CLAVE: ENCONTRAR LA UBICACIÓN MÁS CERCANA
-        
-        # Calculamos la distancia euclidiana al cuadrado.
-        # Usamos ExpressionWrapper para forzar el tipo de salida a FloatField,
-        # resolviendo el FieldError con MySQL.
+        # 2. BÚSQUEDA POR DISTANCIA (FIXED)
         distance_expression = ExpressionWrapper(
             (Cast(F('latitude'), FloatField()) - lat_f) ** 2 + 
             (Cast(F('longitude'), FloatField()) - lon_f) ** 2,
@@ -129,10 +124,7 @@ class CurrentWeatherView(APIView):
             distance=distance_expression
         )
         
-        # Ordenamos por distancia y tomamos el primer resultado (el más cercano).
         closest_location = locations_with_distance.order_by('distance').first()
-
-        # ----------------------------------------------------------------------
 
         if not closest_location:
             return Response(
@@ -140,7 +132,7 @@ class CurrentWeatherView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # 3. Obtener el pronóstico más reciente para la ubicación encontrada
+        # 3. Obtener el pronóstico más reciente
         try:
             forecast = DailyForecast.objects.filter(location=closest_location).order_by('-date').first()
             
@@ -150,24 +142,84 @@ class CurrentWeatherView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            # 4. Serializar y devolver la respuesta
+            # 4. Serializar y devolver
             serializer = DailyForecastSerializer(forecast)
-            
-            # Añadir metadatos
             response_data = serializer.data
             response_data['metadata'] = {
                 'found_city': closest_location.city,
                 'found_latitude': closest_location.latitude,
-                'found_longitude': closest_location.longitude,
-                'searched_latitude': latitude_str,
-                'searched_longitude': longitude_str
+                'found_longitude': closest_location.longitude
             }
             
             return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
-            # Registra el error completo en el log de la terminal
             print(f"Error interno al obtener pronóstico: {e}") 
+            return Response(
+                {"error": "Error interno al procesar el pronóstico. Verifique el log del servidor."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+# ----------------------------------------------------------------------
+# 4. Vista de Búsqueda por Ciudad (Endpoint: /clima-por-ciudad/)
+# ----------------------------------------------------------------------
+
+class CityWeatherView(APIView):
+    """
+    Endpoint para obtener el pronóstico climático actual dado el nombre de la ciudad.
+    """
+    def get(self, request, *args, **kwargs):
+        city_name = request.query_params.get('city')
+
+        # 1. Validar parámetro
+        if not city_name:
+            return Response(
+                {"error": "Se requiere el parámetro 'city' (nombre de la ciudad)."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 2. Buscar la ubicación por nombre (búsqueda insensible a mayúsculas y minúsculas)
+        try:
+            # Usamos icontains (case-insensitive contains) para búsquedas flexibles
+            location = Location.objects.filter(city__icontains=city_name).first()
+            
+            if not location:
+                return Response(
+                    {"error": f"Ciudad no encontrada: No se encontró '{city_name}' en la base de datos."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        
+        except Exception as e:
+             return Response(
+                {"error": f"Error interno en la búsqueda de ubicación: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+        # 3. Obtener el pronóstico más reciente
+        try:
+            forecast = DailyForecast.objects.filter(location=location).order_by('-date').first()
+            
+            if not forecast:
+                 return Response(
+                    {"error": f"Ubicación encontrada: {location.city}, pero no hay pronóstico registrado."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # 4. Serializar y devolver la respuesta
+            serializer = DailyForecastSerializer(forecast)
+            
+            response_data = serializer.data
+            response_data['metadata'] = {
+                'found_city': location.city,
+                'found_latitude': location.latitude,
+                'found_longitude': location.longitude
+            }
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+
+        except Exception as e:
             return Response(
                 {"error": "Error interno al procesar el pronóstico. Verifique el log del servidor."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

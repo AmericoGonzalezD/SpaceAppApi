@@ -3,6 +3,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
+    CityWeatherView,
     LocationViewSet, 
     DailyForecastViewSet, 
     HourlyForecastViewSet, 
@@ -23,6 +24,7 @@ router.register(r'favoritos', FavoriteLocationViewSet) # Rutas para favoritos (P
 
 urlpatterns = [
      path('clima-actual/', CurrentWeatherView.as_view(), name='clima-actual'), # Ruta para clima actual
+     path('clima-por-ciudad/', CityWeatherView.as_view(), name='city-weather'),
     # Incluye todas las rutas generadas por el router (ej: /locaciones/, /locaciones/1/, etc.)
     path('', include(router.urls)),
 ]
