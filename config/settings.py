@@ -92,7 +92,7 @@ DATABASES = {
             'ssl': {
                 # Puedes usar 'require' si tienes el certificado
                 #'ssl_mode': 'REQUIRED',
-                'ssl': {'ssl_mode': 'DISABLED'},
+                'ssl': 'False',
                 'ca': '../certs/azure_mysql_chain.pem',  # Ruta al certificado CA si es necesario
             },
             # Configuración de modo SQL estricto, generalmente recomendada para MySQL
