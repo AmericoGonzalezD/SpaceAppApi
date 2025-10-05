@@ -1,8 +1,14 @@
-# core/models.py
+# app/models.py
 
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import User # Necesario para FavoriteLocation
+from datetime import time
+
+# Configuración de precisión para los nuevos campos científicos
+# Usamos 12 dígitos en total, 6 después del punto decimal.
+DECIMAL_PRECISION = 12
+DECIMAL_PLACES = 6
 
 # ==============================================================================
 # 1. Modelo Location (Ubicación)
@@ -38,29 +44,50 @@ class DailyForecast(models.Model):
     location = models.ForeignKey(Location, on_delete=models.CASCADE, related_name='daily_forecasts')
     date = models.DateField(default=timezone.now)
 
-    # Temperaturas y condición
-    current_temp = models.DecimalField(max_digits=4, decimal_places=1, help_text="Temperatura actual (33°)")
+    # --- Campos de la UI (Pantalla Principal) ---
+    current_temp = models.DecimalField(max_digits=4, decimal_places=1, help_text="Temperatura actual")
     condition_summary = models.CharField(max_length=100, help_text="Ej: Partly cloudy")
-    max_temp = models.DecimalField(max_digits=4, decimal_places=1, help_text="Temperatura máxima del día")
-    min_temp = models.DecimalField(max_digits=4, decimal_places=1, help_text="Temperatura mínima del día")
-    feels_like_temp = models.DecimalField(max_digits=4, decimal_places=1, help_text="Sensación térmica (39°C)")
+    max_temp = models.DecimalField(max_digits=4, decimal_places=1, help_text="Temperatura máxima")
+    min_temp = models.DecimalField(max_digits=4, decimal_places=1, help_text="Temperatura mínima")
+    feels_like_temp = models.DecimalField(max_digits=4, decimal_places=1, help_text="Sensación térmica")
 
-    # Datos adicionales (Details)
-    humidity = models.IntegerField(help_text="Humedad en % (59%)")
-    precipitation_prob = models.IntegerField(help_text="Probabilidad de lluvia en % (21%)")
-    wind_speed = models.DecimalField(max_digits=4, decimal_places=1, help_text="Velocidad del viento (9 km/h)")
+    # --- Datos de Detalles ---
+    humidity = models.IntegerField(help_text="Humedad en %")
+    precipitation_prob = models.IntegerField(help_text="Probabilidad de lluvia en %")
+    wind_speed = models.DecimalField(max_digits=4, decimal_places=1, help_text="Velocidad del viento")
     wind_direction = models.CharField(max_length=10, help_text="Ej: WSW")
-    visibility = models.DecimalField(max_digits=4, decimal_places=1, help_text="Visibilidad en millas o km (10 mi)")
-    pressure = models.DecimalField(max_digits=7, decimal_places=2, help_text="Presión") 
+    visibility = models.DecimalField(max_digits=4, decimal_places=1, help_text="Visibilidad")
+    pressure = models.DecimalField(max_digits=7, decimal_places=2, help_text="Presión Atmosférica") # Corregido a 7
+
     uv_index = models.CharField(max_length=50, default="Low 0")
     air_quality = models.CharField(max_length=50, default="Low 0")
-    dew_point = models.DecimalField(max_digits=4, decimal_places=1, help_text="Punto de rocío (56°)")
-    clouds = models.DecimalField(max_digits=4, decimal_places=1, help_text="Nubosidad (56°)")
+    dew_point = models.DecimalField(max_digits=4, decimal_places=1, help_text="Punto de rocío")
+    clouds = models.DecimalField(max_digits=4, decimal_places=1, help_text="Nubosidad")
 
     # Sol y Luna
-    sunrise = models.TimeField()
-    sunset = models.TimeField()
-    summary = models.TextField(blank=True, null=True, help_text="Resumen del día (Winds from SW to SSW...)")
+    sunrise = models.TimeField(default=time(6, 0)) # Añadimos default para el script de ML
+    sunset = models.TimeField(default=time(18, 0)) # Añadimos default para el script de ML
+    summary = models.TextField(blank=True, null=True, help_text="Resumen del día")
+    
+    # ----------------------------------------------------------------------
+    # Nuevos Campos: Variables Físicas del Modelo Predictivo
+    # ----------------------------------------------------------------------
+    CO_surface_conc = models.DecimalField(max_digits=DECIMAL_PRECISION, decimal_places=DECIMAL_PLACES, null=True, blank=True)
+    total_precip_rate = models.DecimalField(max_digits=DECIMAL_PRECISION, decimal_places=DECIMAL_PLACES, null=True, blank=True)
+    specific_humidity_pred = models.DecimalField(max_digits=DECIMAL_PRECISION, decimal_places=DECIMAL_PLACES, null=True, blank=True)
+    temperature_surface = models.DecimalField(max_digits=DECIMAL_PRECISION, decimal_places=DECIMAL_PLACES, null=True, blank=True)
+    skin_temperature = models.DecimalField(max_digits=DECIMAL_PRECISION, decimal_places=DECIMAL_PLACES, null=True, blank=True)
+    avg_wind_speed_10m = models.DecimalField(max_digits=DECIMAL_PRECISION, decimal_places=DECIMAL_PLACES, null=True, blank=True)
+    surface_pressure_pred = models.DecimalField(max_digits=DECIMAL_PRECISION, decimal_places=DECIMAL_PLACES, null=True, blank=True)
+    cloud_area_pred = models.DecimalField(max_digits=DECIMAL_PRECISION, decimal_places=DECIMAL_PLACES, null=True, blank=True)
+    frozen_precip = models.DecimalField(max_digits=DECIMAL_PRECISION, decimal_places=DECIMAL_PLACES, null=True, blank=True)
+    snowfall_pred = models.DecimalField(max_digits=DECIMAL_PRECISION, decimal_places=DECIMAL_PLACES, null=True, blank=True)
+    dust_concentration = models.DecimalField(max_digits=DECIMAL_PRECISION, decimal_places=DECIMAL_PLACES, null=True, blank=True)
+    SO2_concentration = models.DecimalField(max_digits=DECIMAL_PRECISION, decimal_places=DECIMAL_PLACES, null=True, blank=True)
+    NO2_concentration = models.DecimalField(max_digits=DECIMAL_PRECISION, decimal_places=DECIMAL_PLACES, null=True, blank=True)
+    O3_concentration = models.DecimalField(max_digits=DECIMAL_PRECISION, decimal_places=DECIMAL_PLACES, null=True, blank=True)
+    potential_vorticity = models.DecimalField(max_digits=DECIMAL_PRECISION, decimal_places=DECIMAL_PLACES, null=True, blank=True)
+    # ----------------------------------------------------------------------
 
     def __str__(self):
         return f"{self.location.city} - {self.date}"
@@ -120,7 +147,6 @@ class WeatherAlert(models.Model):
 class FavoriteLocation(models.Model):
     """Asocia una Location con un User para la pantalla de Favoritos."""
 
-    # Se necesita importar 'User' del módulo de autenticación de Django
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='favorite_locations')
     location = models.ForeignKey(Location, on_delete=models.CASCADE)
 
