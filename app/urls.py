@@ -7,7 +7,8 @@ from .views import (
     DailyForecastViewSet, 
     HourlyForecastViewSet, 
     WeatherAlertViewSet, 
-    FavoriteLocationViewSet
+    FavoriteLocationViewSet,
+    CurrentWeatherView
 )
 
 # Creamos un Router para manejar automáticamente las rutas ViewSet
@@ -21,6 +22,7 @@ router.register(r'alertas', WeatherAlertViewSet)
 router.register(r'favoritos', FavoriteLocationViewSet) # Rutas para favoritos (POST, GET, DELETE)
 
 urlpatterns = [
+     path('clima-actual/', CurrentWeatherView.as_view(), name='clima-actual'), # Ruta para clima actual
     # Incluye todas las rutas generadas por el router (ej: /locaciones/, /locaciones/1/, etc.)
     path('', include(router.urls)),
 ]

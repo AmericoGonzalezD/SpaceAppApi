@@ -51,7 +51,7 @@ class DailyForecast(models.Model):
     wind_speed = models.DecimalField(max_digits=4, decimal_places=1, help_text="Velocidad del viento (9 km/h)")
     wind_direction = models.CharField(max_length=10, help_text="Ej: WSW")
     visibility = models.DecimalField(max_digits=4, decimal_places=1, help_text="Visibilidad en millas o km (10 mi)")
-    pressure = models.DecimalField(max_digits=5, decimal_places=2, help_text="Presión")
+    pressure = models.DecimalField(max_digits=7, decimal_places=2, help_text="Presión") 
     uv_index = models.CharField(max_length=50, default="Low 0")
     air_quality = models.CharField(max_length=50, default="Low 0")
     dew_point = models.DecimalField(max_digits=4, decimal_places=1, help_text="Punto de rocío (56°)")
