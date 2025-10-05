@@ -14,13 +14,13 @@ from .views import (
 router = DefaultRouter()
 
 # Registrar ViewSets para CRUD completo
-router.register(r'locations', LocationViewSet)
-router.register(r'daily-forecasts', DailyForecastViewSet)
-router.register(r'hourly-forecasts', HourlyForecastViewSet)
-router.register(r'alerts', WeatherAlertViewSet)
-router.register(r'favorites', FavoriteLocationViewSet) # Rutas para favoritos (POST, GET, DELETE)
+router.register(r'locaciones', LocationViewSet)
+router.register(r'pronosticos-diarios', DailyForecastViewSet)
+router.register(r'pronosticos-horarios', HourlyForecastViewSet)
+router.register(r'alertas', WeatherAlertViewSet)
+router.register(r'favoritos', FavoriteLocationViewSet) # Rutas para favoritos (POST, GET, DELETE)
 
 urlpatterns = [
-    # Incluye todas las rutas generadas por el router (ej: /locations/, /locations/1/, etc.)
+    # Incluye todas las rutas generadas por el router (ej: /locaciones/, /locaciones/1/, etc.)
     path('', include(router.urls)),
 ]
