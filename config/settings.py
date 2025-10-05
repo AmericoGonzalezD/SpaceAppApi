@@ -25,8 +25,11 @@ SECRET_KEY = 'django-insecure-s5u57%iuyvpq9+@p_$(5q$vc8b^dbid^4ei64ssff8-z!qijxj
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
-
+ALLOWED_HOSTS = [
+    '.azurewebsites.net', 
+    'weatheron.earth', 
+    'www.weatheron.earth'
+]
 
 # Application definition
 
