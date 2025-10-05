@@ -1,12 +1,17 @@
 # app/views.py
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.db.models import Max
-from .models import Location, DailyForecast
-from .serializers import DailyForecastSerializer
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated, AllowAny
+# Importaciones necesarias para la búsqueda por distancia en la base de datos
+# 💥 FIX IMPORTADO: ExpressionWrapper para resolver FieldError
+from django.db.models import F, FloatField, ExpressionWrapper
+from django.db.models.functions import Cast
+from decimal import Decimal
+
+# Importa todos los modelos y serializers necesarios
 from .models import (
     Location, 
     DailyForecast, 
@@ -22,21 +27,20 @@ from .serializers import (
     FavoriteLocationSerializer
 )
 
+
 # ----------------------------------------------------------------------
-# 1. ViewSets de Datos Climáticos (Solo Lectura/Administración)
+# 1. ViewSets de Datos Climáticos (CRUD para Administración/Carga)
 # ----------------------------------------------------------------------
 
 class LocationViewSet(viewsets.ModelViewSet):
     """Permite listar y crear ubicaciones (ciudades)."""
     queryset = Location.objects.all()
     serializer_class = LocationSerializer
-    # Permitimos acceso sin autenticación para listar/buscar ubicaciones
     permission_classes = [AllowAny] 
     
 
 class DailyForecastViewSet(viewsets.ModelViewSet):
     """Permite listar y obtener pronósticos diarios (Home Screen)."""
-    # Ordenamos por fecha descendente para obtener el pronóstico más reciente
     queryset = DailyForecast.objects.all().order_by('-date', '-id')
     serializer_class = DailyForecastSerializer
     permission_classes = [AllowAny]
@@ -57,37 +61,26 @@ class WeatherAlertViewSet(viewsets.ModelViewSet):
 
 
 # ----------------------------------------------------------------------
-# 2. ViewSet de Favoritos (Requiere Autenticación y Asignación de Usuario)
+# 2. ViewSet de Favoritos
 # ----------------------------------------------------------------------
 
 class FavoriteLocationViewSet(viewsets.ModelViewSet):
     """Permite a los usuarios gestionar sus ubicaciones favoritas."""
     queryset = FavoriteLocation.objects.all() 
     serializer_class = FavoriteLocationSerializer
-    
-    # NOTA: Debes descomentar esta línea e instalar/configurar JWT 
-    # cuando implementes la autenticación
-    # permission_classes = [IsAuthenticated] 
-    permission_classes = [AllowAny] # Temporalmente, permitimos acceso
-
+    permission_classes = [AllowAny] 
 
     def get_queryset(self):
         """Filtra el queryset para mostrar solo los favoritos del usuario actual."""
-        # Si usas autenticación, el usuario estará disponible en self.request.user
-        # Para pruebas sin autenticación, devolveremos todos
         if self.request.user.is_authenticated:
             return FavoriteLocation.objects.filter(user=self.request.user)
-        return FavoriteLocation.objects.all() # Solo para pruebas
+        return FavoriteLocation.objects.all() 
 
     def perform_create(self, serializer):
         """Asigna el usuario que realiza la petición al crear el favorito."""
-        # Esta línea es crucial para que el favorito se asigne al usuario logueado.
-        # Si usas IsAuthenticated, self.request.user será el usuario.
         if self.request.user.is_authenticated:
              serializer.save(user=self.request.user)
         else:
-             # Necesitas manejar este caso si permites AllowAny para la creación
-             # o implementar un usuario de prueba si es necesario.
              serializer.save()
 
     
@@ -97,75 +90,85 @@ class FavoriteLocationViewSet(viewsets.ModelViewSet):
 
 class CurrentWeatherView(APIView):
     """
-    Endpoint para obtener el pronóstico climático actual (más reciente)
-    dada la latitud y longitud.
-    
-    Ruta: /api/v1/current-weather/?lat=<latitud>&lon=<longitud>
+    Endpoint para obtener el pronóstico más reciente, encontrando la 
+    Location más cercana si las coordenadas no son exactas.
     """
     def get(self, request, *args, **kwargs):
-        # 1. Obtener parámetros de la URL
-        latitude = request.query_params.get('lat')
-        longitude = request.query_params.get('lon')
+        latitude_str = request.query_params.get('lat')
+        longitude_str = request.query_params.get('lon')
 
-        # 2. Validar parámetros
-        if not latitude or not longitude:
+        # 1. Validar y convertir parámetros
+        if not latitude_str or not longitude_str:
             return Response(
-                {"error": "Se requieren los parámetros 'lat' (latitud) y 'lon' (longitud)."},
+                {"error": "Se requieren los parámetros 'lat' y 'lon'."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
-            lat = float(latitude)
-            lon = float(longitude)
-        except ValueError:
+            # 💥 FIX: Convertimos a float para usar en el cálculo SQL 
+            lat_f = float(latitude_str) 
+            lon_f = float(longitude_str)
+        except Exception:
             return Response(
-                {"error": "Los parámetros lat y lon deben ser valores numéricos."},
+                {"error": "Los parámetros lat y lon deben ser valores numéricos válidos."},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # 3. Buscar la ubicación
-        # Usaremos una tolerancia (ej: 0.01) ya que las coordenadas pueden variar ligeramente
-        # En un sistema real, usarías un campo de búsqueda geoespacial (PostGIS)
-        tolerance = 0.01
+        # 2. LÓGICA CLAVE: ENCONTRAR LA UBICACIÓN MÁS CERCANA
         
-        try:
-            location = Location.objects.get(
-                latitude__gte=lat - tolerance,
-                latitude__lte=lat + tolerance,
-                longitude__gte=lon - tolerance,
-                longitude__lte=lon + tolerance
-            )
-        except Location.DoesNotExist:
+        # Calculamos la distancia euclidiana al cuadrado.
+        # Usamos ExpressionWrapper para forzar el tipo de salida a FloatField,
+        # resolviendo el FieldError con MySQL.
+        distance_expression = ExpressionWrapper(
+            (Cast(F('latitude'), FloatField()) - lat_f) ** 2 + 
+            (Cast(F('longitude'), FloatField()) - lon_f) ** 2,
+            output_field=FloatField() 
+        )
+        
+        locations_with_distance = Location.objects.annotate(
+            distance=distance_expression
+        )
+        
+        # Ordenamos por distancia y tomamos el primer resultado (el más cercano).
+        closest_location = locations_with_distance.order_by('distance').first()
+
+        # ----------------------------------------------------------------------
+
+        if not closest_location:
             return Response(
-                {"error": "Ubicación no encontrada en la base de datos para esas coordenadas."},
+                {"error": "No hay ubicaciones registradas en la base de datos para realizar la búsqueda."},
                 status=status.HTTP_404_NOT_FOUND
             )
-        except Location.MultipleObjectsReturned:
-            # Manejar el caso si varias ubicaciones están muy cerca, solo tomamos la primera
-            location = Location.objects.filter(
-                latitude__gte=lat - tolerance,
-                latitude__lte=lat + tolerance,
-                longitude__gte=lon - tolerance,
-                longitude__lte=lon + tolerance
-            ).first()
 
-        # 4. Obtener el pronóstico más reciente (o de hoy) para esa ubicación
+        # 3. Obtener el pronóstico más reciente para la ubicación encontrada
         try:
-            # Buscamos el pronóstico del día de hoy o el más reciente si no hay uno de hoy
-            forecast = DailyForecast.objects.filter(location=location).order_by('-date').first()
+            forecast = DailyForecast.objects.filter(location=closest_location).order_by('-date').first()
             
             if not forecast:
                  return Response(
-                    {"error": f"No se encontró pronóstico para {location.city}."},
+                    {"error": f"Ubicación más cercana encontrada: {closest_location.city}, pero no hay pronóstico registrado."},
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            # 5. Serializar y devolver la respuesta
+            # 4. Serializar y devolver la respuesta
             serializer = DailyForecastSerializer(forecast)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            
+            # Añadir metadatos
+            response_data = serializer.data
+            response_data['metadata'] = {
+                'found_city': closest_location.city,
+                'found_latitude': closest_location.latitude,
+                'found_longitude': closest_location.longitude,
+                'searched_latitude': latitude_str,
+                'searched_longitude': longitude_str
+            }
+            
+            return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
+            # Registra el error completo en el log de la terminal
+            print(f"Error interno al obtener pronóstico: {e}") 
             return Response(
-                {"error": f"Error interno del servidor: {str(e)}"},
+                {"error": "Error interno al procesar el pronóstico. Verifique el log del servidor."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
