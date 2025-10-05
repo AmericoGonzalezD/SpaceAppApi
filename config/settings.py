@@ -89,14 +89,6 @@ DATABASES = {
         
         # Azure requiere SSL/TLS por defecto. Debes indicarle a Django esto.
         'OPTIONS': {
-            'ssl': {
-                # Puedes usar 'require' si tienes el certificado
-                #'ssl_mode': 'REQUIRED',
-                'ssl': 'False',
-                'ca': '../certs/azure_mysql_chain.pem',  # Ruta al certificado CA si es necesario
-            },
-            # Configuración de modo SQL estricto, generalmente recomendada para MySQL
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
         }
     }
 }
